@@ -36,3 +36,4 @@ CLAUDE.local.md
 
 # Personal local scripts (never commit)
 .local/
+scripts/reset-onboarding.sh
