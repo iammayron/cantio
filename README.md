@@ -14,8 +14,8 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/notuselessdev/cantio/releases/latest"><img src="https://img.shields.io/github/v/release/notuselessdev/cantio" alt="Release"></a>
-  <a href="https://github.com/notuselessdev/cantio/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue" alt="License"></a>
+  <a href="https://github.com/iammayron/cantio/releases/latest"><img src="https://img.shields.io/github/v/release/iammayron/cantio" alt="Release"></a>
+  <a href="https://github.com/iammayron/cantio/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue" alt="License"></a>
   <img src="https://img.shields.io/badge/macOS-14%2B-blue" alt="macOS 14+">
   <img src="https://img.shields.io/badge/universal-arm64%20%7C%20x86__64-blue" alt="Universal">
 </p>
@@ -36,7 +36,7 @@ Cantio shows the lyrics of whatever's playing in Spotify, synced line-by-line, i
 ### Homebrew (recommended)
 
 ```sh
-brew install --cask notuselessdev/tap/cantio
+brew install --cask iammayron/tap/cantio
 xattr -dr com.apple.quarantine /Applications/Cantio.app
 ```
 
@@ -44,7 +44,7 @@ Cantio isn't signed with a paid Apple Developer ID, so macOS quarantines it. The
 
 ### Manual
 
-Download the DMG from the [latest release](https://github.com/notuselessdev/cantio/releases/latest), drag **Cantio** to Applications, then on first launch **right-click → Open** (or run):
+Download the DMG from the [latest release](https://github.com/iammayron/cantio/releases/latest), drag **Cantio** to Applications, then on first launch **right-click → Open** (or run):
 
 ```sh
 xattr -dr com.apple.quarantine /Applications/Cantio.app
