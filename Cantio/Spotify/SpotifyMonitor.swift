@@ -112,7 +112,6 @@ final class SpotifyMonitor: ObservableObject, PlaybackSource {
 
     private var task: Task<Void, Never>?
     private var lastEmitted: NowPlaying?
-    private var didRequestPermission = false
 
     private let playingInterval: UInt64 = 500_000_000      // 500 ms
     private let pausedInterval: UInt64 = 2_000_000_000     // 2 s
@@ -228,50 +227,14 @@ final class SpotifyMonitor: ObservableObject, PlaybackSource {
             return .notRunning
         }
         // The *first* AppleEvent to Spotify surfaces the TCC consent prompt —
-        // and a ScriptingBridge read is an AppleEvent. So resolve permission
-        // with the no-ask query BEFORE any read; never touch ScriptingBridge
-        // until it's granted, or the prompt would pop regardless of the gate.
-        switch await resolvePermission(askUser: false) {
-        case .granted:
-            didRequestPermission = true
-            return await runSpotifyScript()
-        case .denied:
-            didRequestPermission = true
-            return .permissionDenied
-        case .notDetermined, .targetNotRunning, .unknown:
-            break
-        }
-        // Undecided. Surface the consent prompt only when allowed — onboarding
-        // holds it off so its dedicated Spotify step owns the ask, never a
-        // standalone popup over the splash. Dismissed prompts and post-login
-        // TCC resets leave the state `.notDetermined`; re-asking on the next
-        // poll (rather than one-shot) keeps the app from stranding there.
-        guard allowsPermissionPrompt, !didRequestPermission else {
-            return .permissionNotDetermined
-        }
-        switch await resolvePermission(askUser: true) {
-        case .granted:
-            didRequestPermission = true
-            return await runSpotifyScript()
-        case .denied:
-            didRequestPermission = true
-            return .permissionDenied
-        case .notDetermined, .targetNotRunning, .unknown:
-            return .permissionNotDetermined
-        }
-    }
-
-    /// Queries (or, with `askUser`, prompts for) automation permission off the
-    /// main thread — `AEDeterminePermissionToAutomateTarget` blocks while the
-    /// prompt is up. `askUser: false` never surfaces a prompt.
-    private func resolvePermission(askUser: Bool) async -> AutomationPermission {
-        await withCheckedContinuation { continuation in
-            DispatchQueue.global(qos: .utility).async {
-                continuation.resume(returning: askUser
-                    ? SpotifyPermission.request()
-                    : SpotifyPermission.check())
-            }
-        }
+        // and a ScriptingBridge read is an AppleEvent. Onboarding holds the
+        // read off entirely so the prompt fires from its dedicated Spotify
+        // step, never as a standalone popup over the splash. There is no
+        // no-ask precheck: `AEDeterminePermissionToAutomateTarget` never
+        // returns against Spotify (see `SpotifyPermission`), so permission is
+        // read back off the event error instead.
+        guard allowsPermissionPrompt else { return .permissionNotDetermined }
+        return await runSpotifyScript()
     }
 
     private func runSpotifyScript() async -> SpotifyPollResult {
@@ -379,8 +342,24 @@ final class SpotifyMonitor: ObservableObject, PlaybackSource {
         guard let app = SBApplication(bundleIdentifier: spotifyBundleId) else {
             return .notInstalled
         }
+        // Bound the send so a wedged Spotify can never stall the poll loop.
+        app.timeout = SpotifyPermission.sendTimeoutTicks
         guard app.isRunning else { return .notRunning }
-        guard let track = app.value(forKey: "currentTrack") as? NSObject else { return .notRunning }
+        guard let track = app.value(forKey: "currentTrack") as? NSObject else {
+            // A nil read is either TCC refusing the event or Spotify quitting
+            // mid-poll; the AppleEvent error tells them apart.
+            switch SpotifyPermission.classify(app.lastError()) {
+            case .denied:
+                SpotifyPermission.record(.denied)
+                return .permissionDenied
+            case .notDetermined:
+                SpotifyPermission.record(.notDetermined)
+                return .permissionNotDetermined
+            default:
+                return .notRunning
+            }
+        }
+        SpotifyPermission.record(.granted)
         let id = (track.value(forKey: "id") as? String) ?? ""
         guard !id.isEmpty else { return .notRunning }
         let rawState = (app.value(forKey: "playerState") as? NSNumber)?.intValue

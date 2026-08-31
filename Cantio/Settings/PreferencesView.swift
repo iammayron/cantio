@@ -180,6 +180,10 @@ struct SettingsView: View {
                         }
                     }
 
+                    PrefGroup(title: "Permissions", palette: palette) {
+                        SpotifyAccessRow(palette: palette)
+                    }
+
                     PrefGroup(title: "Sources & cache", palette: palette) {
                         PrefRow(label: "Read playback from", palette: palette) {
                             InfoPill(text: "Spotify (local)", palette: palette)
@@ -270,6 +274,165 @@ struct SettingsView: View {
 
 // MARK: - Group / row scaffolding
 
+/// Live status + one-tap recovery for the Automation (AppleEvents) grant that
+/// lets Cantio read Spotify. Without it the app silently shows nothing, so the
+/// state is spelled out here and every dead end has an action attached.
+/// Repolls on a light cadence so granting in System Settings — or quitting
+/// Spotify — reflects without reopening the window.
+struct SpotifyAccessRow: View {
+    let palette: FL.Palette
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    @State private var state: SpotifyAccessState
+    @State private var working = false
+
+    private let poll = Timer.publish(every: 3, on: .main, in: .common).autoconnect()
+
+    /// `initialState` exists so snapshot tests can pin each state; the app
+    /// always takes the live reading.
+    init(palette: FL.Palette, initialState: SpotifyAccessState? = nil) {
+        self.palette = palette
+        _state = State(initialValue: initialState ?? SpotifyPermission.accessState())
+    }
+
+    var body: some View {
+        PrefRow(label: "Spotify access", sub: detail, palette: palette) {
+            HStack(spacing: 8) {
+                if working {
+                    if reduceMotion {
+                        Text("Checking…")
+                            .font(.system(size: 11.5))
+                            .foregroundStyle(palette.textMuted)
+                    } else {
+                        ProgressView()
+                            .controlSize(.small)
+                            .accessibilityLabel("Checking Spotify access")
+                    }
+                }
+                // Glyph carries the same distinction as the wording, so state
+                // never rests on text lightness alone.
+                Image(systemName: state == .granted ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
+                    .font(.system(size: 11))
+                    .foregroundStyle(state == .granted ? palette.accent : palette.textMuted)
+                    .accessibilityHidden(true)
+                Text(status)
+                    .font(.system(size: 11.5))
+                    .foregroundStyle(palette.text)
+                    .fixedSize()
+                    .accessibilityLabel("Spotify access: \(status)")
+                ForEach(actions, id: \.label) { a in
+                    SmallButton(label: a.label, palette: palette, action: a.run)
+                        .accessibilityHint(a.hint)
+                        .disabled(working)
+                }
+            }
+        }
+        .onReceive(poll) { _ in if !working { state = SpotifyPermission.accessState() } }
+        // The row rewrites itself from a background timer; without this a
+        // VoiceOver user gets no notice that granting in System Settings landed.
+        .onChange(of: state) { _, new in
+            AccessibilityNotification.Announcement(Self.spoken(new)).post()
+        }
+    }
+
+    private static func spoken(_ s: SpotifyAccessState) -> String {
+        switch s {
+        case .granted: return "Spotify access connected"
+        case .denied: return "Spotify access denied"
+        case .undecided: return "Spotify access not granted"
+        case .notRunning: return "Spotify is not open"
+        case .notInstalled: return "Spotify is not installed"
+        }
+    }
+
+    // MARK: Copy
+
+    private var status: String {
+        switch state {
+        case .granted: return "Connected"
+        case .denied: return "Denied"
+        case .undecided: return "Not granted"
+        case .notRunning: return "Spotify not open"
+        case .notInstalled: return "Spotify not installed"
+        }
+    }
+
+    private var detail: String {
+        switch state {
+        case .granted: return "Cantio can read your current track."
+        case .denied: return "Blocked in Privacy & Security → Automation."
+        case .undecided: return "Allow Cantio to control Spotify when macOS asks."
+        case .notRunning: return "Open Spotify, then grant access."
+        case .notInstalled: return "Cantio reads playback from the Spotify desktop app."
+        }
+    }
+
+    // MARK: Actions
+
+    private struct Act { let label: String; let hint: String; let run: () -> Void }
+
+    private var actions: [Act] {
+        switch state {
+        case .granted:
+            return []
+        case .undecided:
+            return [Act(label: "Grant Access",
+                        hint: "Asks macOS for permission to read Spotify",
+                        run: grant)]
+        case .denied:
+            // A denied decision is sticky: macOS never re-prompts, and the
+            // Automation pane offers no way to re-add a missing entry. Clearing
+            // our own TCC record is the only in-app route back.
+            return [Act(label: "Reconnect",
+                        hint: "Clears Cantio's Automation decision and asks macOS again",
+                        run: reconnect),
+                    Act(label: "System Settings",
+                        hint: "Opens Privacy and Security, then Automation",
+                        run: SpotifyPermission.openSystemSettings)]
+        case .notRunning:
+            return [Act(label: "Open Spotify",
+                        hint: "Launches the Spotify desktop app",
+                        run: SpotifyPermission.launchSpotify)]
+        case .notInstalled:
+            return [Act(label: "Get Spotify",
+                        hint: "Opens the Spotify download page in your browser",
+                        run: {
+                guard let url = URL(string: "https://www.spotify.com/download") else { return }
+                NSWorkspace.shared.open(url)
+            })]
+        }
+    }
+
+    /// Off-main: the read blocks while the TCC prompt is up.
+    private func grant() {
+        working = true
+        DispatchQueue.global(qos: .userInitiated).async {
+            _ = SpotifyPermission.request()
+            DispatchQueue.main.async {
+                working = false
+                state = SpotifyPermission.accessState()
+            }
+        }
+    }
+
+    private func reconnect() {
+        working = true
+        DispatchQueue.global(qos: .userInitiated).async {
+            let cleared = SpotifyPermission.reset()
+            let resolved = cleared ? SpotifyPermission.request() : SpotifyPermission.check()
+            DispatchQueue.main.async {
+                working = false
+                state = SpotifyPermission.accessState()
+                // Reset can't clear a decision the user re-denies, and it fails
+                // outright on managed Macs — send them to the pane instead of
+                // leaving the button looking inert.
+                if resolved != .granted { SpotifyPermission.openSystemSettings() }
+            }
+        }
+    }
+}
+
 private struct PrefGroup<Content: View>: View {
     let title: String
     let palette: FL.Palette
@@ -311,6 +474,9 @@ private struct PrefRow<Control: View>: View {
                     Text(sub)
                         .font(.system(size: 11.5))
                         .foregroundStyle(palette.textMuted)
+                        // Wrap rather than truncate — the permission subtitles
+                        // name a System Settings path that is useless clipped.
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
             Spacer(minLength: 8)
@@ -494,10 +660,13 @@ struct SmallButton: View {
             Text(label)
                 .font(.system(size: 11.5, weight: .medium))
                 .foregroundStyle(palette.text)
-                .padding(.horizontal, 9).padding(.vertical, 3)
+                .fixedSize()
+                .padding(.horizontal, 12)
+                .frame(minHeight: 28)
                 .background(RoundedRectangle(cornerRadius: 6, style: .continuous)
-                    .fill(Color.white.opacity(0.08))
+                    .fill(palette.glassThin)
                     .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(palette.border, lineWidth: 0.5)))
+                .contentShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
         }
         .buttonStyle(.plain)
     }

@@ -19,7 +19,7 @@ Tests: `xcodebuild -scheme Cantio test -derivedDataPath .build` (targets pending
 
 - Swift 5.9+, SwiftUI primary, AppKit at bridge points (`NSWindow`, `NSVisualEffectView`, `NSHostingView`, `NSEvent` monitors, Carbon `RegisterEventHotKey`).
 - macOS 14+ deployment target.
-- SPM dependencies: **none currently**. `swift-snapshot-testing` planned (testing-strategy.md §10).
+- SPM dependencies: `swift-snapshot-testing` (test target only). No runtime deps.
 - AppleScript / Scripting Bridge for Spotify control. `SMAppService.mainApp` for launch-at-login. No third-party libs.
 
 ## Architecture overview
@@ -50,6 +50,9 @@ Tests: `xcodebuild -scheme Cantio test -derivedDataPath .build` (targets pending
 - Hit targets ≥ 28pt. New text always carries VoiceOver label. Every action has keyboard equivalent.
 - Don't add LaunchAgents plist for login — `SMAppService.mainApp` only.
 - Don't request Spotify Automation permission at launch — lazily, on first use.
+- **Never call `AEDeterminePermissionToAutomateTarget`.** It never returns against Spotify (1.2.98 / macOS 26) — not with `askUserIfNeeded: false`, not with a runloop on the calling thread. It hung `SpotifyMonitor.poll()` on its first iteration, so `availability` stayed at its init value and the app silently showed "Spotify not running" forever, with zero AppleEvents traffic in `tccd`. Derive permission from the AppleEvent error of a *real* read instead (`-1743` denied, `-1744` not determined) and always set `SBApplication.timeout` so a wedged target can't stall the loop.
+- Any blocking call inside the poll loop must be bounded. A hung poll is invisible — no crash, no log, just a stale `@Published`.
+- `PrefRow`'s `sub` wraps (`.fixedSize(horizontal: false, vertical: true)`); text in a `PrefRow` control that must not be squeezed out by sibling buttons needs `.fixedSize()`.
 
 ## Workflow rules
 

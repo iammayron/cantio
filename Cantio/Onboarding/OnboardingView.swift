@@ -359,27 +359,7 @@ struct OnboardingView: View {
 /// The five surfaces the Spotify step can present, derived from whether the app
 /// is installed/running and TCC's automation decision. Each carries its own
 /// glyph + copy + action so progress never reads by color alone.
-private enum OBSpotifyState: Equatable {
-    case notInstalled
-    case notRunning
-    case undecided
-    case denied
-    case granted
-}
-
-/// Snapshots the current Spotify connection state without surfacing a prompt.
-/// `SpotifyPermission.check()` is the no-ask query; install/run checks gate it
-/// since TCC can't be queried for an app that isn't present or running.
-private func currentSpotifyState() -> OBSpotifyState {
-    let id = "com.spotify.client"
-    if NSWorkspace.shared.urlForApplication(withBundleIdentifier: id) == nil { return .notInstalled }
-    if NSRunningApplication.runningApplications(withBundleIdentifier: id).isEmpty { return .notRunning }
-    switch SpotifyPermission.check() {
-    case .granted: return .granted
-    case .denied: return .denied
-    case .notDetermined, .targetNotRunning, .unknown: return .undecided
-    }
-}
+private typealias OBSpotifyState = SpotifyAccessState
 
 /// Contextual permission step: explains the ask, then fires the system consent
 /// prompt *here* (over the assistant) instead of letting the polling loop pop it
@@ -388,7 +368,7 @@ private func currentSpotifyState() -> OBSpotifyState {
 private struct OBSpotifyStep: View {
     let palette: FL.Palette
 
-    @State private var state: OBSpotifyState = .undecided
+    @State private var state: OBSpotifyState = SpotifyPermission.accessState()
     @State private var requesting = false
 
     // Light cadence — enough to catch Spotify opening or an external grant.
@@ -405,7 +385,7 @@ private struct OBSpotifyStep: View {
         .onReceive(poll) { _ in if !requesting { refresh() } }
     }
 
-    private func refresh() { state = currentSpotifyState() }
+    private func refresh() { state = SpotifyPermission.accessState() }
 
     // MARK: Per-state content
 
@@ -474,10 +454,7 @@ private struct OBSpotifyStep: View {
         }
     }
 
-    private func launchSpotify() {
-        guard let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.spotify.client") else { return }
-        NSWorkspace.shared.openApplication(at: url, configuration: NSWorkspace.OpenConfiguration())
-    }
+    private func launchSpotify() { SpotifyPermission.launchSpotify() }
 
     private func openDownloadPage() {
         guard let url = URL(string: "https://www.spotify.com/download") else { return }
