@@ -1,9 +1,9 @@
 ---
-description: SwiftUI idioms for Floric. Loaded when editing files matching `Floric/**/*.swift` that use SwiftUI views.
-globs: Floric/**/*.swift
+description: SwiftUI idioms for Cantio. Loaded when editing files matching `Cantio/**/*.swift` that use SwiftUI views.
+globs: Cantio/**/*.swift
 ---
 
-# SwiftUI rules — Floric
+# SwiftUI rules — Cantio
 
 ## State ownership
 
@@ -30,7 +30,8 @@ globs: Floric/**/*.swift
 
 ## Backgrounds
 
-- Use `NSVisualEffectView` (via `VisualEffectBackground`) — never custom blur.
+- Never hand-roll blur. macOS 26+: `.glassEffect(.regular, in:)`. macOS 14–15 fallback: `NSVisualEffectView` via `VisualEffectBackground`. Deployment target is 14.0 — both branches ship, gate with `if #available(macOS 26, *)`.
+- Glass is navigation-layer only: panels, pills, floating chrome. Never on lyric lines, list rows, or anything inside a scroll view. Never glass on glass — it cannot sample itself and degrades to flat tint.
 - For materials over transparent windows, host window MUST be `isOpaque = false` + `backgroundColor = .clear`.
 - Apply `.clipShape(...)` AFTER `.background(...)` to clip the material.
 - For `MenuBarExtra(.window)` panels: use the `WindowTransparencyApplier` pattern in `MenuBarPanel.swift` — re-apply across runloop ticks.

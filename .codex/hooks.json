@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "'/Users/mayron/projects/mayron/floric/.codex/hooks/PostToolUse.sh'"
+            "command": "'/Users/mayron/projects/mayron/cantio/.codex/hooks/PostToolUse.sh'"
           }
         ]
       }
@@ -16,7 +16,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "'/Users/mayron/projects/mayron/floric/.codex/hooks/SessionStart.sh'"
+            "command": "'/Users/mayron/projects/mayron/cantio/.codex/hooks/SessionStart.sh'"
           }
         ]
       }
@@ -26,7 +26,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "'/Users/mayron/projects/mayron/floric/.codex/hooks/Stop.sh'"
+            "command": "'/Users/mayron/projects/mayron/cantio/.codex/hooks/Stop.sh'"
           }
         ]
       }

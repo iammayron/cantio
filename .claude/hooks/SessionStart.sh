@@ -5,7 +5,7 @@ set +e
 
 cd "$(git rev-parse --show-toplevel 2>/dev/null || echo .)" || exit 0
 
-echo "=== Floric session ==="
+echo "=== Cantio session ==="
 echo "Branch: $(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo 'no-git')"
 echo "Last commit: $(git log -1 --oneline 2>/dev/null || echo 'none')"
 
@@ -17,7 +17,7 @@ else
 fi
 
 # Check most recent test run age.
-latest=$(ls -t /Users/mayron/Library/Developer/Xcode/DerivedData/Floric-*/Logs/Test/*.xcresult 2>/dev/null | head -1)
+latest=$(ls -t /Users/mayron/Library/Developer/Xcode/DerivedData/Cantio-*/Logs/Test/*.xcresult 2>/dev/null | head -1)
 if [ -n "$latest" ]; then
   age_sec=$(( $(date +%s) - $(stat -f %m "$latest" 2>/dev/null || echo 0) ))
   age_min=$(( age_sec / 60 ))

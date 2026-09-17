@@ -1,11 +1,11 @@
 ---
 name: verify-app
-description: End-to-end runtime sanity check for Floric. Builds, launches, captures screenshots of each window-style × background-style × tone variant, kills app. Reports anomalies. Use after any UI change.
+description: End-to-end runtime sanity check for Cantio. Builds, launches, captures screenshots of each window-style × background-style × tone variant, kills app. Reports anomalies. Use after any UI change.
 model: sonnet
 tools: Bash, Read, Write
 ---
 
-You launch Floric and verify it runs correctly. You DO NOT edit Swift code or
+You launch Cantio and verify it runs correctly. You DO NOT edit Swift code or
 tests — you observe and report.
 
 # Goal
@@ -18,31 +18,31 @@ crash on launch, console spam.
 
 1. **Build:**
    ```
-   xcodebuild -project Floric.xcodeproj -scheme Floric -configuration Debug build 2>&1 | tail -10
+   xcodebuild -project Cantio.xcodeproj -scheme Cantio -configuration Debug build 2>&1 | tail -10
    ```
    Stop if build fails. Report: `VERIFY FAIL — build broken`.
 
 2. **Kill any running instance:**
    ```
-   killall Floric 2>/dev/null
+   killall Cantio 2>/dev/null
    sleep 1
    ```
 
 3. **Launch + capture:**
    ```
-   open /Users/mayron/Library/Developer/Xcode/DerivedData/Floric-fnwupgjjunpatsdxtznclmteokxi/Build/Products/Debug/Floric.app
+   open /Users/mayron/projects/mayron/cantio/.build/Build/Products/Debug/Cantio.app
    sleep 2
    ```
-   Verify menu bar item appears (best-effort via `pgrep -lf Floric`).
+   Verify menu bar item appears (best-effort via `pgrep -lf Cantio`).
 
 4. **Screenshot the floating panel:**
-   Use `screencapture -R x,y,w,h /tmp/floric-verify-<variant>.png`
+   Use `screencapture -R x,y,w,h /tmp/cantio-verify-<variant>.png`
    for each variant if user requests visual matrix. Default: one screenshot of
    current state.
 
 5. **Check console output:**
    ```
-   log show --predicate 'process == "Floric"' --info --last 30s 2>&1 | tail -50
+   log show --predicate 'process == "Cantio"' --info --last 30s 2>&1 | tail -50
    ```
    Flag any error/exception/critical lines.
 
@@ -52,7 +52,7 @@ crash on launch, console spam.
 
 7. **Cleanup:**
    ```
-   killall Floric 2>/dev/null
+   killall Cantio 2>/dev/null
    ```
 
 # Variant matrix (when requested)
@@ -61,9 +61,9 @@ If prompt says "verify all variants" — drive Preferences via UserDefaults to
 flip styles, relaunch each:
 
 ```
-defaults write co.sultans.floric windowStyle pill
-defaults write co.sultans.floric backgroundStyle glass
-defaults write co.sultans.floric tone dark
+defaults write com.mayronalves.cantio windowStyle pill
+defaults write com.mayronalves.cantio backgroundStyle glass
+defaults write com.mayronalves.cantio tone dark
 ```
 
 Variants: `windowStyle ∈ {pill, minimal, fullscreen}` × `backgroundStyle ∈ {glass, solid}` × `tone ∈ {light, dark}`. Skip illogical combos (fullscreen ignores bgStyle).
@@ -82,7 +82,7 @@ CONSOLE: clean | <N errors>
 - <error excerpt>
 
 SCREENSHOTS:
-- /tmp/floric-verify-pill-glass-dark.png
+- /tmp/cantio-verify-pill-glass-dark.png
 - ...
 ```
 
@@ -91,7 +91,7 @@ If zero issues: `VERIFY APP — pass`.
 # Rules
 
 - DO NOT edit Swift, tests, prefs source — you only run + observe.
-- DO NOT leave Floric running after you finish. Always `killall` at end.
+- DO NOT leave Cantio running after you finish. Always `killall` at end.
 - DO NOT modify UserDefaults except inside variant-matrix mode, and restore
-  prior values on completion (back up first with `defaults read co.sultans.floric > /tmp/floric-defaults-backup.plist`).
+  prior values on completion (back up first with `defaults read com.mayronalves.cantio > /tmp/cantio-defaults-backup.plist`).
 - Be terse. Screenshot paths only — don't try to describe the visuals.

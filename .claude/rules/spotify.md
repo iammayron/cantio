@@ -1,13 +1,13 @@
 ---
-description: Spotify integration rules for Floric. Loaded when editing files in Floric/Spotify/.
-globs: Floric/Spotify/**/*.swift
+description: Spotify integration rules for Cantio. Loaded when editing files in Cantio/Spotify/.
+globs: Cantio/Spotify/**/*.swift
 ---
 
-# Spotify rules — Floric
+# Spotify rules — Cantio
 
 ## Source of truth
 
-- Floric reads playback via **AppleScript scripting bridge** to the Spotify app — local only, no API tokens, no network for playback.
+- Cantio reads playback via **AppleScript scripting bridge** to the Spotify app — local only, no API tokens, no network for playback.
 - `SpotifyMonitor` owns polling + state. `NowPlaying` is the snapshot type.
 - Lyrics fetched from LRCLIB (separate concern — see `LyricsService`).
 

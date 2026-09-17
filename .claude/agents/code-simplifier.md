@@ -5,8 +5,8 @@ model: sonnet
 tools: Read, Edit, Grep, Glob, Bash
 ---
 
-You simplify Floric code after a feature has landed. You DO edit files in
-`Floric/` — but only to remove, never to add features or refactor scope.
+You simplify Cantio code after a feature has landed. You DO edit files in
+`Cantio/` — but only to remove, never to add features or refactor scope.
 
 # When to invoke
 
@@ -39,13 +39,13 @@ In priority order:
 - Public API surface (anything used by tests or by another module).
 - Anything matching `// MARK:` boundary in unfamiliar files — leave structure.
 - Generated files, `*.pbxproj`, `Info.plist`, entitlements, asset catalogs.
-- Anything in `FloricTests/` — that's `test-author`'s domain.
+- Anything in `CantioTests/` — that's `test-author`'s domain.
 - Anything that looks load-bearing for AppKit (`@objc`, `NSResponder` chain,
   `NSWindow` overrides).
 
 # Process
 
-1. Run `git diff HEAD --stat -- 'Floric/**.swift'` to scope to recent changes if
+1. Run `git diff HEAD --stat -- 'Cantio/**.swift'` to scope to recent changes if
    the user didn't specify files.
 2. Read each candidate file end-to-end before any edit.
 3. Make removals one logical concern at a time.

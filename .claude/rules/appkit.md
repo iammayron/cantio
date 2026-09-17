@@ -1,9 +1,9 @@
 ---
-description: AppKit + NSWindow rules for Floric. Loaded when editing files involving NSWindow, NSPanel, NSEvent, NSApplication, or NSViewRepresentable bridges.
-globs: Floric/Window/**/*.swift, Floric/MenuBarPanel.swift, Floric/FloricApp.swift, Floric/Hotkey/**/*.swift
+description: AppKit + NSWindow rules for Cantio. Loaded when editing files involving NSWindow, NSPanel, NSEvent, NSApplication, or NSViewRepresentable bridges.
+globs: Cantio/Window/**/*.swift, Cantio/MenuBarPanel.swift, Cantio/CantioApp.swift, Cantio/Hotkey/**/*.swift
 ---
 
-# AppKit rules — Floric
+# AppKit rules — Cantio
 
 ## NSWindow
 

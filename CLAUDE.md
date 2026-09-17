@@ -35,7 +35,7 @@ Tests: `xcodebuild -scheme Cantio test -derivedDataPath .build` (targets pending
 
 ## Anti-patterns to avoid
 
-- Never use custom blur — always `NSVisualEffectView` (`.popover` for menu, `.hudWindow` for floating). Set `state = .active`, `blendingMode = .behindWindow` for desktop overlays.
+- Never hand-roll blur — no Core Image backdrop shaders, no layered opacity fakes. Which system material depends on the OS: on macOS 26+ translucent chrome is `.glassEffect(.regular, in:)`; below it, `NSVisualEffectView` (`.popover` for menu, `.hudWindow` for floating, `state = .active`, `blendingMode = .behindWindow` for desktop overlays). Deployment target is 14.0, so both branches are live code — every glass surface sits behind `if #available(macOS 26, *)` with a material fallback (`MenuBarPanel.body`, `LyricsContentView`'s pill). Adding glass without the fallback branch breaks the app on 14–15.
 - Window must be `isOpaque = false` + `backgroundColor = .clear` for material to show through. SwiftUI re-installs opaque backing on `MenuBarExtra(.window)` — re-apply across runloop ticks (see `WindowTransparencyApplier`).
 - Pill / fullscreen styles MUST set `window.hasShadow = false` then `invalidateShadow()` — rectangular `NSWindow` shadow halos the silhouette otherwise. Minimal keeps shadow.
 - Settings opens via `SettingsLink` (NEVER `NSApp.activate` + open scene manually). Flip `setActivationPolicy(.regular)` on appear, `.accessory` on disappear.
@@ -52,6 +52,11 @@ Tests: `xcodebuild -scheme Cantio test -derivedDataPath .build` (targets pending
 - Don't request Spotify Automation permission at launch — lazily, on first use.
 - **Never call `AEDeterminePermissionToAutomateTarget`.** It never returns against Spotify (1.2.98 / macOS 26) — not with `askUserIfNeeded: false`, not with a runloop on the calling thread. It hung `SpotifyMonitor.poll()` on its first iteration, so `availability` stayed at its init value and the app silently showed "Spotify not running" forever, with zero AppleEvents traffic in `tccd`. Derive permission from the AppleEvent error of a *real* read instead (`-1743` denied, `-1744` not determined) and always set `SBApplication.timeout` so a wedged target can't stall the loop.
 - Any blocking call inside the poll loop must be bounded. A hung poll is invisible — no crash, no log, just a stale `@Published`.
+- **Liquid Glass paints no rim on our tray panel — we draw it.** `.glassEffect(.regular)` already matches Apple's own dropdowns on transmission (measured, same backdrop: native lifts a dark backdrop +28/+28/+28, ours +23/+22/+24; yellow band ×0.70 vs ×0.68). What it does NOT paint on a custom `NSPanel` is the 1px contour native menus have — ~0.43–0.57× body luminance down the sides, ~1.18× specular along the bottom, resolving in a single pixel (so it is not a window shadow). `NSGlassEffectView` has no `state`/`isEmphasized` and no density knob, and making the panel key does not summon it (measured: edge pixel-identical). `MenuBarPanel.rimGradient` is that contour. Verify by ratio, not eye.
+- **Never compare our glass to a native menu over different backdrops.** Glass over a window vs a system menu over the wallpaper is not a comparison; that mismatch produced three wrong fixes in one session (`.clear`, `.tint()`, and swapping to `NSVisualEffectView(.menu)` — all reverted). Use one screenshot, one backdrop, vertical saturated bands wider than the blur radius, and diff panel-closed vs panel-open captures at identical coordinates.
+- Dead ends, measured, do not retry: `.tint()` on glass is a no-op (moved the body 2/255); `NSVisualEffectView(.menu)` darkens a saturated backdrop ~10× more than the native menu; `.clear` is too thin for menu chrome.
+- **Native menu-bar panels touch the menu bar.** Control Centre, Battery and Now Playing all sit flush; only non-native apps leave a gap. Do not add one.
+- Nothing inside a glass panel may paint a soft dark layer over it (WWDC25 323). `AlbumArtView` takes `ambientShadow: false` on the tray panel for this reason — though measured, it was only worth ~1%, so it is hygiene, not a cure.
 - `PrefRow`'s `sub` wraps (`.fixedSize(horizontal: false, vertical: true)`); text in a `PrefRow` control that must not be squeezed out by sibling buttons needs `.fixedSize()`.
 
 ## Workflow rules
@@ -80,7 +85,7 @@ See `docs/testing-strategy.md`. Summary:
 
 See `docs/apple-hig-checklist.md`. Quick-reject auto-fails:
 
-- Custom blur instead of `NSVisualEffectView`.
+- Hand-rolled blur instead of the system material (`.glassEffect` on 26+, `NSVisualEffectView` below), or a glass surface with no `#available(macOS 26, *)` fallback branch.
 - Inline RGB outside palette.
 - Animation > 0.5s for routine state.
 - Missing reduce-motion / reduce-transparency honoring.

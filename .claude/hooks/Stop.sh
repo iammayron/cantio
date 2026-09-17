@@ -12,16 +12,16 @@ if [ -z "$swift_changes" ]; then
 fi
 
 # Most recent test result.
-latest=$(ls -t /Users/mayron/Library/Developer/Xcode/DerivedData/Floric-*/Logs/Test/*.xcresult 2>/dev/null | head -1)
+latest=$(ls -t /Users/mayron/Library/Developer/Xcode/DerivedData/Cantio-*/Logs/Test/*.xcresult 2>/dev/null | head -1)
 if [ -z "$latest" ]; then
-  echo "REMINDER: Swift edits uncommitted; no test runs found. Consider /test-floric."
+  echo "REMINDER: Swift edits uncommitted; no test runs found. Consider /test-cantio."
   exit 0
 fi
 
 age_sec=$(( $(date +%s) - $(stat -f %m "$latest" 2>/dev/null || echo 0) ))
 if [ "$age_sec" -gt 300 ]; then
   age_min=$(( age_sec / 60 ))
-  echo "REMINDER: Swift edits uncommitted; last test was ${age_min}m ago. Consider /test-floric."
+  echo "REMINDER: Swift edits uncommitted; last test was ${age_min}m ago. Consider /test-cantio."
 fi
 
 exit 0

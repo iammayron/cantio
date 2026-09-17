@@ -1,19 +1,19 @@
-# Floric
+# Cantio
 
 Native macOS menu-bar app. Floats Spotify lyrics over the desktop in sync. Target user: Mac power user who lives in Spotify and wants karaoke-grade lyrics without giving up privacy or HIG-native feel. Design goals: Apple-HIG-native (looks like Apple shipped it), seamless (zero-config, lazy permissions, persistent across spaces), privacy-first (no telemetry, no analytics, only LRCLIB network egress).
 
 ## Build & run
 
 ```bash
-xcodebuild -project /Users/mayron/projects/mayron/floric/Floric.xcodeproj \
-  -scheme Floric -configuration Debug \
-  -derivedDataPath /Users/mayron/projects/mayron/floric/.build build
+xcodebuild -project /Users/mayron/projects/mayron/cantio/Cantio.xcodeproj \
+  -scheme Cantio -configuration Debug \
+  -derivedDataPath /Users/mayron/projects/mayron/cantio/.build build
 
-killall Floric 2>/dev/null; \
-open /Users/mayron/projects/mayron/floric/.build/Build/Products/Debug/Floric.app
+killall Cantio 2>/dev/null; \
+open /Users/mayron/projects/mayron/cantio/.build/Build/Products/Debug/Cantio.app
 ```
 
-Tests: `xcodebuild -scheme Floric test -derivedDataPath .build` (targets pending — see testing-strategy.md §10).
+Tests: `xcodebuild -scheme Cantio test -derivedDataPath .build` (targets pending — see testing-strategy.md §10).
 
 ## Tech stack
 
@@ -24,9 +24,9 @@ Tests: `xcodebuild -scheme Floric test -derivedDataPath .build` (targets pending
 
 ## Architecture overview
 
-- `FloricApp` (`@main`) + `AppDelegate` bootstrap — single `Preferences.shared`, `SpotifyMonitor`, `LyricsStore`, `FloatingLyricsController` constructed in `bootstrapIfNeeded()`.
+- `CantioApp` (`@main`) + `AppDelegate` bootstrap — single `Preferences.shared`, `SpotifyMonitor`, `LyricsStore`, `FloatingLyricsController` constructed in `bootstrapIfNeeded()`.
 - `MenuBarExtra(.window)` panel rendered by `MenuBarPanel` (`.menuBarExtraStyle(.window)`); `WindowTransparencyApplier` walks ancestor `NSView` chain to clear opaque backings so material shows.
-- `FloatingLyricsController` owns `FloatingLyricsWindow` — borderless, `.floating`, `canJoinAllSpaces`, `setFrameAutosaveName("FloricFloatingLyricsWindow")`, conditional click-through with Option-click toggle + per-pixel alpha hit-test for pill style.
+- `FloatingLyricsController` owns `FloatingLyricsWindow` — borderless, `.floating`, `canJoinAllSpaces`, `setFrameAutosaveName("CantioFloatingLyricsWindow")`, conditional click-through with Option-click toggle + per-pixel alpha hit-test for pill style.
 - `SpotifyMonitor` polls via AppleScript / Scripting Bridge — exposes `availability` + `nowPlaying` as `@Published`. Permission-denied is a first-class state.
 - `LyricsStore` binds to monitor; `LRCLibProvider` fetches; `LyricsCache` persists to disk (atomic, keyed by track id).
 - `Preferences` (`@MainActor`, UserDefaults-backed `@Published`) — single source of truth. UI binds; controllers observe via Combine. Migrations at init only (legacy `windowPreset` → `windowStyle`+`backgroundStyle`).
@@ -57,9 +57,9 @@ See `docs/Codex-workflow.md`. Summary:
 
 - Plan mode default for non-trivial changes (`Shift+Tab` ×2). Tighten plan with lead, then auto-accept.
 - Verification loop is non-negotiable — every change ends with `xcodebuild` + tests + (if UI) snapshot diff.
-- Slash commands in `.Codex/commands/` for repeats: `/build-and-run`, `/test-floric`, `/snapshot-record`, `/hig-check`, `/commit-floric`.
+- Slash commands in `.Codex/commands/` for repeats: `/build-and-run`, `/test-cantio`, `/snapshot-record`, `/hig-check`, `/commit-cantio`.
 - Hooks (`.Codex/settings.json`): PostToolUse swift-format on `*.swift`; Stop hook reminds to test if uncommitted Swift changes; PreToolUse blocks `git commit` if build stale.
-- Pre-allow `Bash(xcodebuild:*)`, `Bash(killall Floric)`, etc. — don't `--dangerously-skip-permissions`.
+- Pre-allow `Bash(xcodebuild:*)`, `Bash(killall Cantio)`, etc. — don't `--dangerously-skip-permissions`.
 - End-of-session: log every wrong assumption Codex made into this file.
 
 ## Testing rules

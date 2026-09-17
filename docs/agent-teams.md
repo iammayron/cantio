@@ -313,7 +313,7 @@ Debate structure beats anchoring bias of single sequential investigation.
 
 ## 15. Quick decision matrix for THIS project
 
-When designing future teams in `/Users/mayron/projects/mayron/floric/`:
+When designing future teams in `/Users/mayron/projects/mayron/cantio/`:
 
 | Scenario                                          | Recommendation                                       |
 | ------------------------------------------------- | ---------------------------------------------------- |

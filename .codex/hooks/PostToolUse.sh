@@ -1,5 +1,5 @@
 #!/bin/bash
-# Format Floric Swift files after Edit/Write. Fail-soft so a missing formatter
+# Format Cantio Swift files after Edit/Write. Fail-soft so a missing formatter
 # never blocks Claude.
 
 set +e
@@ -8,11 +8,11 @@ set +e
 payload=$(cat)
 file_path=$(echo "$payload" | /usr/bin/python3 -c "import sys, json; d=json.load(sys.stdin); print(d.get('tool_input', {}).get('file_path', ''))" 2>/dev/null)
 
-# Only act on Swift sources inside Floric/ or FloricTests/.
+# Only act on Swift sources inside Cantio/ or CantioTests/.
 case "$file_path" in
   *.swift)
     case "$file_path" in
-      */Floric/*|*/FloricTests/*) ;;
+      */Cantio/*|*/CantioTests/*) ;;
       *) exit 0 ;;
     esac
     ;;
