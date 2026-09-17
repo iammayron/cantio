@@ -26,6 +26,39 @@ struct MenuBarPanel: View {
         return prefs.effectiveGlassStyle
     }
 
+    static let panelShape = RoundedRectangle(cornerRadius: 17, style: .continuous)
+
+    /// Slack between the glass silhouette and the window edge. `positionPanel`
+    /// sizes the window to the SwiftUI fitting size, which reserves nothing for
+    /// overdraw, so without this the shadow below is clipped at the boundary.
+    /// `StatusBarPopover.positionPanel` subtracts it back out when placing the
+    /// window so the visible panel does not move.
+    static let glassMargin: CGFloat = 24
+
+    /// Top- and bottom-edge specular hairlines.
+    ///
+    /// Apple's dropdowns carry a light 1px line along the top and bottom of the
+    /// panel; the sides instead run darker than the body. Measured on our own
+    /// panel over one backdrop: body L=62, our bottom edge L=74 (1.19x) — the
+    /// right ratio, yet invisible next to the native one, because a centred
+    /// `stroke` splits that highlight across two physical pixels at half
+    /// coverage each. The integral matches and the line still reads as absent.
+    /// `strokeBorder` draws wholly inside the shape, landing it on one row.
+    ///
+    /// The sides are left to the glass: `.glassEffect()` paints its own contour
+    /// one pixel *outside* the content rect (measured L=11 against body L=47,
+    /// 0.24x), and a second line drawn inside only doubles the apparent
+    /// thickness. That is what made an earlier full-perimeter stroke wrong.
+    ///
+    /// Clear by 4.5% of the height — at radius 17 on a ~400pt panel the corner
+    /// arc is ~4.3%, so the highlight wraps the corners and stops.
+    private static let rimGradient = LinearGradient(
+        stops: [.init(color: .white.opacity(0.22), location: 0),
+                .init(color: .clear, location: 0.045),
+                .init(color: .clear, location: 0.955),
+                .init(color: .white.opacity(0.16), location: 1)],
+        startPoint: .top, endPoint: .bottom)
+
     private var tone: FL.Tone { colorScheme == .dark ? .dark : .light }
     private var palette: FL.Palette { FL.palette(tone: tone, hue: prefs.accentHue) }
 
@@ -33,21 +66,35 @@ struct MenuBarPanel: View {
         Group {
             if #available(macOS 26, *), panelGlassStyle != .off {
                 // Single glass surface — no `GlassEffectContainer` wrapper.
-                // The container is for blending/morphing multiple glass
-                // shapes; with one shape it can suppress the edge lensing
-                // the system normally paints on the boundary.
+                // The container merges/morphs *multiple* glass shapes; around
+                // one shape it is a no-op that suppresses the edge lensing the
+                // system paints on the boundary.
+                //
+                // Corner radius 17: measured, not guessed. Walking up from the
+                // panel bottom, the Wi-Fi dropdown's left edge travels 11px
+                // over 14 rows before it settles; at radius 12 ours travelled
+                // 8px over 10. 12 x 1.4 = 17.
                 panelContent
-                    .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                    .glassEffect(.regular, in: Self.panelShape)
+                    .overlay(Self.panelShape.strokeBorder(Self.rimGradient, lineWidth: 1))
+                    // `.glassEffect()` casts no shadow of its own on a hosted
+                    // panel — measured, the body runs straight into the
+                    // backdrop. Apple's dropdowns do: below the Wi-Fi panel the
+                    // wallpaper drops ~8% and ramps back over 26+px. Drawn here
+                    // rather than via `NSWindow.hasShadow`, which is shaped to
+                    // the rectangular window and leaves a hard black line at
+                    // the edge that the native panels do not have.
+                    .shadow(color: .black.opacity(0.10), radius: 18, y: 2)
+                    .padding(Self.glassMargin)
             } else {
                 panelContent
                     .background(panelBackground)
                     .overlay(
-                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        Self.panelShape
                             .strokeBorder(palette.borderStrong, lineWidth: 0.5))
-                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    .clipShape(Self.panelShape)
             }
         }
-        .frame(width: 290)
         .onAppear(perform: onAppear)
     }
 
@@ -154,14 +201,23 @@ struct MenuBarPanel: View {
             .padding(.horizontal, 4)
             .padding(.vertical, 4)
         }
+        .frame(width: 290)
     }
 
-    /// Panel chrome background for non-Liquid-Glass branches:
-    /// 1. Reduce Transparency / Increase Contrast → solid `palette.bgElev`.
-    /// 2. Fallback (macOS 14/15 or `glassStyle == .off`) → existing
-    ///    `NSVisualEffectView .popover`.
-    /// macOS 26+ glass is applied directly to `panelContent` in `body` —
-    /// `.glassEffect()` needs a real surface to render against.
+    /// Non-glass chrome: Reduce Transparency / Increase Contrast → solid
+    /// `palette.bgElev`; macOS 14/15 or `glassStyle == .off` → the system
+    /// popover material. macOS 26+ glass is applied to `panelContent` in
+    /// `body` — `.glassEffect()` needs a real surface to render against.
+    ///
+    /// Do not swap the glass branch for an `NSVisualEffectView` material to
+    /// chase the native look. Measured over one dark wallpaper (40,42,54),
+    /// Apple's own Control Center dropdown lifts the body by +28 on every
+    /// channel and `.glassEffect(.regular)` lifts it by +23/+22/+24 — the same
+    /// material. `.menu` material darkens a saturated backdrop roughly ten
+    /// times as much as the native menu does. Any comparison must put both
+    /// menus over the *same* backdrop: glass over a window and the system
+    /// menu over the desktop are not comparable, and that mismatch previously
+    /// produced a wrong conclusion.
     @ViewBuilder
     private var panelBackground: some View {
         if reduceTransparency || colorSchemeContrast == .increased {
@@ -176,7 +232,8 @@ struct MenuBarPanel: View {
         HStack(spacing: 8) {
             Button(action: focusSpotify) {
                 AlbumArtView(hues: trackHues, size: 42,
-                             artworkURL: monitor.nowPlaying?.artworkURL)
+                             artworkURL: monitor.nowPlaying?.artworkURL,
+                             ambientShadow: false)
             }
             .buttonStyle(.plain)
             .help("Show Spotify")

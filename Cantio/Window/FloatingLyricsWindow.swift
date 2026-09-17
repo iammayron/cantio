@@ -31,7 +31,10 @@ final class FloatingLyricsWindow: NSWindow {
         isReleasedWhenClosed = false
         isOpaque = false
         backgroundColor = .clear
-        hasShadow = true
+        // Every style draws its own silhouette (capsule / full-bleed), so the
+        // rectangular AppKit shadow would halo it. `applyWindowChrome` also
+        // enforces this on every style change.
+        hasShadow = false
         level = .floating
         collectionBehavior = [.canJoinAllSpaces, .stationary, .fullScreenAuxiliary]
         isMovableByWindowBackground = true

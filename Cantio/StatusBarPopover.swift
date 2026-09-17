@@ -328,8 +328,19 @@ final class StatusBarPopover: NSObject, NSWindowDelegate {
         statusItem.button?.highlight(false)
     }
 
+    /// AppKit shoves any window whose top crosses the menu bar back down to
+    /// `visibleFrame.maxY`. The panel deliberately overhangs it by
+    /// `MenuBarPanel.glassMargin` — that slack is transparent shadow room, and
+    /// letting it be constrained away pushes the *visible* glass down by the
+    /// same 24pt, which is exactly the gap that marks a panel as non-native.
+    private final class UnconstrainedPanel: NSPanel {
+        override func constrainFrameRect(_ frameRect: NSRect, to screen: NSScreen?) -> NSRect {
+            frameRect
+        }
+    }
+
     private func makePanel() -> NSPanel {
-        let p = NSPanel(
+        let p = UnconstrainedPanel(
             contentRect: NSRect(x: 0, y: 0, width: 290, height: 360),
             styleMask: [.borderless, .nonactivatingPanel, .fullSizeContentView],
             backing: .buffered,
@@ -337,7 +348,11 @@ final class StatusBarPopover: NSObject, NSWindowDelegate {
         )
         p.isOpaque = false
         p.backgroundColor = .clear
-        p.hasShadow = true
+        // No AppKit window shadow: `.glassEffect()` paints none of its own
+        // either, so `MenuBarPanel` draws the drop shadow in SwiftUI, shaped
+        // to the glass rather than to the rectangular window (see the comment
+        // on `MenuBarPanel.body`).
+        p.hasShadow = false
         p.level = .popUpMenu
         p.collectionBehavior = [.canJoinAllSpaces, .stationary, .fullScreenAuxiliary]
         p.isMovable = false
@@ -380,23 +395,36 @@ final class StatusBarPopover: NSObject, NSWindowDelegate {
         if let host = panel.contentView as? NSHostingView<AnyView> {
             host.layoutSubtreeIfNeeded()
         }
+        // The SwiftUI content pads the glass by `glassMargin` on every side so
+        // its shadow has room to draw; `inset` is that slack, subtracted back
+        // out below so the *visible* panel lands where it always did.
+        let inset = MenuBarPanel.glassMargin
         let fittingSize = panel.contentView?.fittingSize ?? CGSize(width: 290, height: 360)
-        let width = max(fittingSize.width, 290)
+        let width = max(fittingSize.width, 290 + inset * 2)
         let height = max(fittingSize.height, 80)
 
-        let gap: CGFloat = 5
         // Default left-align: panel's left edge under the status item's left
         // edge. If the panel would spill off the right edge, flip to
         // right-aligned (panel's right edge under the status item's right
         // edge) — same fallback the system menus use.
         let visible = screen.visibleFrame
         let edgeMargin: CGFloat = 6
-        var originX = buttonRectOnScreen.minX
-        if originX + width > visible.maxX - edgeMargin {
-            originX = buttonRectOnScreen.maxX - width
+        var originX = buttonRectOnScreen.minX - inset
+        if originX + width - inset > visible.maxX - edgeMargin {
+            originX = buttonRectOnScreen.maxX - width + inset
         }
-        originX = min(max(originX, visible.minX + edgeMargin), visible.maxX - width - edgeMargin)
-        var origin = NSPoint(x: originX, y: buttonRectOnScreen.minY - height - gap)
+        originX = min(max(originX, visible.minX + edgeMargin - inset),
+                      visible.maxX - width - edgeMargin + inset)
+        // Anchor Y to the screen's visible top — i.e. the menu bar's bottom
+        // edge — not to `buttonRectOnScreen.minY`. macOS 27 collapsed the menu
+        // bar into a single window, and the status button's converted frame no
+        // longer sits flush with the visible bar: anchoring to it dropped the
+        // panel a measured 24pt. No gap: Apple's own dropdowns (Control Centre,
+        // Battery, Now Playing) sit flush with the bar — a few points of air is
+        // the tell that a panel is not native.
+        let menuBarBottom = visible.maxY
+        let origin = NSPoint(x: originX,
+                             y: menuBarBottom - height + inset)
         panel.setFrame(NSRect(origin: origin, size: CGSize(width: width, height: height)),
                        display: true)
     }

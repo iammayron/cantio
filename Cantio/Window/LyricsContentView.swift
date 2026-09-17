@@ -60,9 +60,7 @@ struct LyricsContentView: View {
     private var palette: FL.Palette {
         FL.palette(tone: effectiveTone, hue: prefs.accentHue)
     }
-    /// When Reduce Transparency is on, glass / pill modes degrade to solid.
     private var effectiveTone: FL.Tone { resolvedTone }
-    private var degradeToSolid: Bool { reduceTransparency }
     private var increaseContrast: Bool { colorSchemeContrast == .increased }
 
     /// Effective glass style for the pill. Honors accessibility:
@@ -393,6 +391,11 @@ struct LyricsContentView: View {
             .multilineTextAlignment(.center)
             .padding(.horizontal, 16)
             .blur(radius: 1.5)
+            // Same halo, inactive values. Siblings float free of any capsule,
+            // so nothing to clip against. After the blur, so the halo is not
+            // itself blurred.
+            .shadow(color: .black.opacity(0.35), radius: 2, y: 1)
+            .shadow(color: .black.opacity(0.22), radius: 8, y: 2)
             .opacity(exists ? opacity : 0)
             // Instant: the pill window resizes per line, and animating the
             // siblings' reflow made them visibly slide across the screen.
@@ -557,16 +560,21 @@ struct PillCapsule: View {
     var reduceTransparency: Bool = false
 
     var body: some View {
-        // L2: When Liquid Glass is active and available, wrap the capsule in
-        // a GlassEffectContainer so any sibling glass surfaces (e.g. future
-        // controls inside the pill) merge into one silhouette. Falls back to
-        // the legacy capsule fill on macOS < 26 or when glassStyle == .off.
+        // Single glass surface — no `GlassEffectContainer`. The container
+        // exists to merge/morph *multiple* glass shapes; around one shape it
+        // is a no-op that can suppress the edge lensing the system paints on
+        // the boundary. The pill's siblings are plain text, not glass.
         if #available(macOS 26, *), glassStyle != .off {
-            GlassEffectContainer(spacing: 0) {
-                pillContent
-                    .glassEffect(in: Capsule())
-            }
-            .transaction { $0.animation = nil }
+            pillContent
+                .glassEffect(.regular, in: Capsule())
+                // `.glassEffect()` casts no shadow of its own on a hosted
+                // window (measured on the tray panel, see `MenuBarPanel.body`),
+                // and `FloatingLyricsController.applyWindowChrome` keeps
+                // `NSWindow.hasShadow` off — a rectangular window shadow under
+                // a capsule halos the silhouette. So the capsule lifts off the
+                // wallpaper only if SwiftUI draws it, same values as the panel.
+                .shadow(color: .black.opacity(0.10), radius: 18, y: 2)
+                .transaction { $0.animation = nil }
         } else {
             pillContent
                 .background { legacyBackground }
@@ -589,8 +597,19 @@ struct PillCapsule: View {
             // hugs its intrinsic width when short and wraps only when it would
             // exceed the parent's screen-width max. The window grows to fit.
             .multilineTextAlignment(.center)
+            // Legibility halo. The glass adopts whatever is behind the window,
+            // so over a bright backdrop the capsule goes pale and the accent
+            // text has nothing to sit against. Same values as
+            // `LyricLineView`'s active line.
+            .shadow(color: .black.opacity(0.55), radius: 3, y: 1)
+            .shadow(color: .black.opacity(0.35), radius: 12, y: 2)
             .padding(.horizontal, max(12, fontSize * 0.9))
             .padding(.vertical, max(7, fontSize * 0.5))
+            // Load-bearing, not cosmetic: a radius-12 halo leaks well past the
+            // 7pt vertical padding, and `PillCapsuleShadowLeakTests` asserts
+            // the rows above the capsule darken by no more than 0.20. Clipping
+            // to the same capsule the glass uses contains it.
+            .clipShape(Capsule())
     }
 
     private var legacyBackground: some View {
@@ -663,6 +682,11 @@ struct AlbumArtView: View {
     let hues: [Double]
     let size: CGFloat
     var artworkURL: String? = nil
+    /// Wide ambient shadow. Off when the tile sits on a Liquid Glass surface:
+    /// WWDC25 session 323 — "if your app has any extra backgrounds or darkening
+    /// effects behind the bar items, make sure to remove them, as these will
+    /// interfere with the effect." The tight contact shadow stays either way.
+    var ambientShadow: Bool = true
 
     var body: some View {
         ZStack {
@@ -685,7 +709,7 @@ struct AlbumArtView: View {
             RoundedRectangle(cornerRadius: size * 0.12, style: .continuous)
                 .strokeBorder(.white.opacity(0.06), lineWidth: 0.5))
         .shadow(color: .black.opacity(0.25), radius: 1, y: 1)
-        .shadow(color: .black.opacity(0.18), radius: 14, y: 4)
+        .shadow(color: .black.opacity(ambientShadow ? 0.18 : 0), radius: 14, y: 4)
         // Purely decorative — the song title/artist text carries the label.
         .accessibilityHidden(true)
     }
