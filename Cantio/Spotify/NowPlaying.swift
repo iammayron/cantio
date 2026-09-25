@@ -28,6 +28,21 @@ struct NowPlaying: Equatable {
     /// as `artwork url`. Nil if the track has no artwork or the property
     /// fails (older Spotify builds).
     var artworkURL: String?
+    var shuffling: Bool = false
+    /// Spotify's AppleScript `repeating` is on/off only — no repeat-one.
+    var repeating: Bool = false
+    /// 0–100.
+    var volume: Int = 100
+}
+
+/// Public web link for a Spotify URI, for sharing. Nil for URIs with no
+/// public page (ads, local files).
+func shareURL(for trackId: String) -> URL? {
+    let parts = trackId.split(separator: ":")
+    guard parts.count == 3, parts[0] == "spotify",
+          parts[1] == "track" || parts[1] == "episode",
+          !parts[2].isEmpty else { return nil }
+    return URL(string: "https://open.spotify.com/\(parts[1])/\(parts[2])")
 }
 
 enum SpotifyAvailability: Equatable {

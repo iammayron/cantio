@@ -58,6 +58,12 @@ Tests: `xcodebuild -scheme Cantio test -derivedDataPath .build` (targets pending
 - **Native menu-bar panels touch the menu bar.** Control Centre, Battery and Now Playing all sit flush; only non-native apps leave a gap. Do not add one.
 - Nothing inside a glass panel may paint a soft dark layer over it (WWDC25 323). `AlbumArtView` takes `ambientShadow: false` on the tray panel for this reason — though measured, it was only worth ~1%, so it is hygiene, not a cure.
 - `PrefRow`'s `sub` wraps (`.fixedSize(horizontal: false, vertical: true)`); text in a `PrefRow` control that must not be squeezed out by sibling buttons needs `.fixedSize()`.
+- **Never hand-edit `Cantio.xcodeproj/project.pbxproj`.** `project.yml` is the source and `xcodegen generate` rewrites the pbxproj (the release scripts run it). New files under `Cantio/` or `CantioTests/` are picked up by the path globs; just regenerate.
+- `isMovableByWindowBackground` never fires over an `NSHostingView` (it does not report `mouseDownCanMoveWindow`). A draggable SwiftUI window needs an AppKit view behind the content that calls `window.performDrag(with:)` (`FloatingPlayerView.WindowDragArea`).
+- A borderless window in this `.accessory` app does not become key on click, so SwiftUI `.keyboardShortcut`s in it are dead. Activate + `makeKey()` on mouse-down, then `makeKey()` again one tick later: activation lands asynchronously and hands key back to the last key window (`FloatingPlayerController`).
+- "It's behind the Dock" means raise the window above the Dock (`CGWindowLevelForKey(.dockWindow) + 1`), not clamp it away from the Dock. Clamping also stops it reaching the bottom edge, which the user had just asked for.
+- SF Symbols set with `.font(size:)` snap to a text baseline and sit 0.5–1px off-centre in a circle at 1x (the user's display is 1x). Draw control glyphs `.resizable().scaledToFit()` in a fixed even frame (`TransportButton`). Measure centring on a 1x render; do not eyeball a 2x one.
+- **Glass casts its own large shadow while the window is key.** It measured ~28pt of falloff and was clipped into a hard rectangle by 16pt of slack. Size window slack for the key state (40pt on the player), and measure with the window actually key. See liquid-glass-macos §2.
 
 ## Workflow rules
 

@@ -81,6 +81,10 @@ protocol PlaybackSource: AnyObject {
     func nextTrack(onError: @escaping @MainActor (Error) -> Void)
     /// Sets player position in seconds. Caller is responsible for throttling.
     func seek(to seconds: Double, onError: @escaping @MainActor (Error) -> Void)
+    /// Sets Spotify's volume (0–100). Caller is responsible for throttling.
+    func setVolume(_ volume: Int, onError: @escaping @MainActor (Error) -> Void)
+    func setShuffling(_ on: Bool, onError: @escaping @MainActor (Error) -> Void)
+    func setRepeating(_ on: Bool, onError: @escaping @MainActor (Error) -> Void)
 }
 
 /// Errors emitted by `SpotifyMonitor` transport commands.
@@ -249,6 +253,9 @@ final class SpotifyMonitor: ObservableObject, PlaybackSource {
     /// Seeds availability + now-playing state for tests that exercise the
     /// transport layer without running the real polling loop. Internal so
     /// `@testable import Cantio` can reach it; not part of the shipped API.
+    /// Non-nil → command scripts are recorded here instead of sent to Spotify.
+    var _capturedScriptsForTesting: [String]?
+
     func _setStateForTesting(availability: SpotifyAvailability, nowPlaying: NowPlaying?) {
         self.availability = availability
         self.nowPlaying = nowPlaying
@@ -322,8 +329,45 @@ final class SpotifyMonitor: ObservableObject, PlaybackSource {
         """, onError: onError)
     }
 
+    func setVolume(_ volume: Int, onError: @escaping @MainActor (Error) -> Void = { _ in }) {
+        let v = max(0, min(100, volume))
+        setPlayerProperty("sound volume", to: "\(v)", onError: onError) { $0.volume = v }
+    }
+
+    func setShuffling(_ on: Bool, onError: @escaping @MainActor (Error) -> Void = { _ in }) {
+        setPlayerProperty("shuffling", to: "\(on)", onError: onError) { $0.shuffling = on }
+    }
+
+    func setRepeating(_ on: Bool, onError: @escaping @MainActor (Error) -> Void = { _ in }) {
+        setPlayerProperty("repeating", to: "\(on)", onError: onError) { $0.repeating = on }
+    }
+
+    private func setPlayerProperty(_ property: String, to value: String,
+                                   onError: @escaping @MainActor (Error) -> Void,
+                                   optimistic: (inout NowPlaying) -> Void) {
+        guard availability == .available else {
+            onError(PlaybackCommandError.notAvailable)
+            return
+        }
+        if var np = nowPlaying {
+            optimistic(&np)
+            nowPlaying = np
+        }
+        runCommandScript("""
+        tell application id "com.spotify.client"
+            if it is running then set \(property) to \(value)
+        end tell
+        """, onError: onError)
+    }
+
     private func runCommandScript(_ source: String,
                                   onError: @escaping @MainActor (Error) -> Void) {
+        #if DEBUG
+        if _capturedScriptsForTesting != nil {
+            _capturedScriptsForTesting?.append(source)
+            return
+        }
+        #endif
         DispatchQueue.global(qos: .userInitiated).async {
             let script = NSAppleScript(source: source)
             var error: NSDictionary?
@@ -378,7 +422,10 @@ final class SpotifyMonitor: ObservableObject, PlaybackSource {
             durationSeconds: Double((track.value(forKey: "duration") as? NSNumber)?.doubleValue ?? 0) / 1_000.0,
             positionSeconds: (app.value(forKey: "playerPosition") as? NSNumber)?.doubleValue ?? 0,
             state: state,
-            artworkURL: artworkURL.isEmpty ? nil : artworkURL
+            artworkURL: artworkURL.isEmpty ? nil : artworkURL,
+            shuffling: (app.value(forKey: "shuffling") as? NSNumber)?.boolValue ?? false,
+            repeating: (app.value(forKey: "repeating") as? NSNumber)?.boolValue ?? false,
+            volume: (app.value(forKey: "soundVolume") as? NSNumber)?.intValue ?? 100
         ))
     }
 }

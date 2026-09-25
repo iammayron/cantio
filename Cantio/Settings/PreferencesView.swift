@@ -175,6 +175,22 @@ struct SettingsView: View {
                         PrefRow(label: "Show floating lyrics", palette: palette) {
                             FlToggle(value: $prefs.windowVisible, palette: palette)
                         }
+                        PrefRow(label: "Show player", palette: palette) {
+                            FlToggle(value: $prefs.playerVisible, palette: palette)
+                        }
+                        PrefRow(label: "Player background", palette: palette) {
+                            SegmentedPicker(
+                                value: Binding(
+                                    get: { prefs.playerBackground.label },
+                                    set: { newLabel in
+                                        if let b = PlayerBackground.allCases.first(where: { $0.label == newLabel }) {
+                                            prefs.playerBackground = b
+                                        }
+                                    }),
+                                options: PlayerBackground.allCases.map(\.label),
+                                palette: palette)
+                                .accessibilityLabel("Player background")
+                        }
                         PrefRow(label: "Launch at login", palette: palette) {
                             FlToggle(value: $prefs.launchAtLogin, palette: palette)
                         }

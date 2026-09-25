@@ -457,15 +457,8 @@ struct LyricsContentView: View {
 
     /// Album-art-derived hues when extraction succeeded, else a deterministic
     /// hash of the track id so identity still reads before/without artwork.
-    private var trackHues: [Double] { artColors.hues ?? hashHues }
-
-    private var hashHues: [Double] {
-        let seed = monitor.nowPlaying?.trackId ?? "cantio"
-        var hash = UInt64(5381)
-        for ch in seed.unicodeScalars { hash = hash &* 33 &+ UInt64(ch.value) }
-        let h0 = Double(hash % 360)
-        return [h0, (h0 + 56).truncatingRemainder(dividingBy: 360),
-                (h0 + 110).truncatingRemainder(dividingBy: 360)]
+    private var trackHues: [Double] {
+        artColors.hues ?? AlbumArtView.hues(for: monitor.nowPlaying?.trackId)
     }
 }
 
@@ -687,6 +680,16 @@ struct AlbumArtView: View {
     /// effects behind the bar items, make sure to remove them, as these will
     /// interfere with the effect." The tight contact shadow stays either way.
     var ambientShadow: Bool = true
+
+    /// Deterministic hues from a track id, so identity reads before (or
+    /// without) artwork.
+    static func hues(for trackId: String?) -> [Double] {
+        var hash = UInt64(5381)
+        for ch in (trackId ?? "cantio").unicodeScalars { hash = hash &* 33 &+ UInt64(ch.value) }
+        let h0 = Double(hash % 360)
+        return [h0, (h0 + 56).truncatingRemainder(dividingBy: 360),
+                (h0 + 110).truncatingRemainder(dividingBy: 360)]
+    }
 
     var body: some View {
         ZStack {

@@ -50,14 +50,17 @@ struct MenuBarPanel: View {
     /// 0.24x), and a second line drawn inside only doubles the apparent
     /// thickness. That is what made an earlier full-perimeter stroke wrong.
     ///
-    /// Clear by 4.5% of the height — at radius 17 on a ~400pt panel the corner
-    /// arc is ~4.3%, so the highlight wraps the corners and stops.
-    private static let rimGradient = LinearGradient(
+    /// `fade` is the corner arc as a fraction of the height (radius 17 on a
+    /// ~400pt panel is ~4.3%, so 4.5%), so the highlight wraps the corners
+    /// and stops.
+    static func rimGradient(fade: CGFloat = 0.045) -> LinearGradient {
+        LinearGradient(
         stops: [.init(color: .white.opacity(0.22), location: 0),
-                .init(color: .clear, location: 0.045),
-                .init(color: .clear, location: 0.955),
+                .init(color: .clear, location: fade),
+                .init(color: .clear, location: 1 - fade),
                 .init(color: .white.opacity(0.16), location: 1)],
         startPoint: .top, endPoint: .bottom)
+    }
 
     private var tone: FL.Tone { colorScheme == .dark ? .dark : .light }
     private var palette: FL.Palette { FL.palette(tone: tone, hue: prefs.accentHue) }
@@ -76,7 +79,7 @@ struct MenuBarPanel: View {
                 // 8px over 10. 12 x 1.4 = 17.
                 panelContent
                     .glassEffect(.regular, in: Self.panelShape)
-                    .overlay(Self.panelShape.strokeBorder(Self.rimGradient, lineWidth: 1))
+                    .overlay(Self.panelShape.strokeBorder(Self.rimGradient(), lineWidth: 1))
                     // `.glassEffect()` casts no shadow of its own on a hosted
                     // panel — measured, the body runs straight into the
                     // backdrop. Apple's dropdowns do: below the Wi-Fi panel the
@@ -104,7 +107,19 @@ struct MenuBarPanel: View {
             nowPlayingCard
             ScrubberRow(monitor: monitor, palette: palette)
                 .padding(.horizontal, 12)
-                .padding(.bottom, 10)
+                .padding(.bottom, 4)
+            // No shortcuts here: the tray panel can stay key after closing and
+            // would leak ⌘S / ⌘R into other apps (see `TransportControls`).
+            // Glyphs are 10pt centred in 30pt buttons, so a 4pt inset puts
+            // their edges on the menu rows' 14pt icon / shortcut columns.
+            HStack(spacing: 4) {
+                ShuffleButton(monitor: monitor, palette: palette)
+                RepeatButton(monitor: monitor, palette: palette)
+                Spacer(minLength: 0)
+                ShareTrackButton(nowPlaying: monitor.nowPlaying, palette: palette)
+            }
+            .padding(.horizontal, 4)
+            .padding(.bottom, 6)
             if lyrics.state == .notFound, monitor.nowPlaying != nil {
                 LyricsNudgeRow(palette: palette)
                     .padding(.horizontal, 12)
@@ -122,6 +137,11 @@ struct MenuBarPanel: View {
                         label: prefs.windowVisible ? "Hide lyrics window" : "Show lyrics window",
                         shortcut: "⌥⌘L", palette: palette) {
                     prefs.windowVisible.toggle()
+                }
+                MenuRow(icon: .player,
+                        label: prefs.playerVisible ? "Hide player" : "Show player",
+                        palette: palette) {
+                    prefs.playerVisible.toggle()
                 }
                 let isFullscreen = prefs.windowStyle == .fullscreen
                 MenuRow(icon: .fullscreen,
@@ -231,7 +251,7 @@ struct MenuBarPanel: View {
     private var nowPlayingCard: some View {
         HStack(spacing: 8) {
             Button(action: focusSpotify) {
-                AlbumArtView(hues: trackHues, size: 42,
+                AlbumArtView(hues: AlbumArtView.hues(for: monitor.nowPlaying?.trackId), size: 42,
                              artworkURL: monitor.nowPlaying?.artworkURL,
                              ambientShadow: false)
             }
@@ -301,14 +321,6 @@ struct MenuBarPanel: View {
         return "Now playing: \(np.title) by \(np.artist)"
     }
 
-    private var trackHues: [Double] {
-        let seed = monitor.nowPlaying?.trackId ?? "cantio"
-        var hash = UInt64(5381)
-        for ch in seed.unicodeScalars { hash = hash &* 33 &+ UInt64(ch.value) }
-        let h0 = Double(hash % 360)
-        return [h0, (h0 + 56).truncatingRemainder(dividingBy: 360),
-                (h0 + 110).truncatingRemainder(dividingBy: 360)]
-    }
 }
 
 // MARK: - Transport controls
@@ -331,7 +343,7 @@ struct TransportControls: View {
             // / ⌘← / ⌘→ into other apps and randomly skips Spotify tracks.
             // Mouse + VoiceOver-only for now; system-wide hotkey is a
             // separate Carbon `RegisterEventHotKey` opt-in.
-            TransportButton(symbol: "backward.fill",
+            TransportButton(symbol: "backward.end.fill",
                             label: "Previous track",
                             palette: palette,
                             disabled: disabled,
@@ -347,7 +359,7 @@ struct TransportControls: View {
                 monitor.playPause()
             }
 
-            TransportButton(symbol: "forward.fill",
+            TransportButton(symbol: "forward.end.fill",
                             label: "Next track",
                             palette: palette,
                             disabled: disabled,
@@ -358,12 +370,17 @@ struct TransportControls: View {
     }
 }
 
-private struct TransportButton: View {
+struct TransportButton: View {
     let symbol: String
     let label: String
     let palette: FL.Palette
     let disabled: Bool
     let primary: Bool
+    /// On state for toggle glyphs (shuffle, repeat): accent glyph plus a ring,
+    /// so it never reads the same as hover or leans on colour alone.
+    var on: Bool = false
+    /// Legibility halo on the glyph, for glass over an unknown backdrop.
+    var halo: Bool = false
     let action: () -> Void
 
     @State private var hover = false
@@ -373,11 +390,21 @@ private struct TransportButton: View {
             ZStack {
                 Circle()
                     .fill(background)
+                    .overlay(Circle().strokeBorder(palette.accent, lineWidth: on && !primary ? 1 : 0))
+                    .frame(width: primary ? 30 : 26, height: primary ? 30 : 26)
+                // A fixed even box, not a font-sized glyph: text layout snaps
+                // the symbol to its baseline, which at 1x left it 0.5px left
+                // and 1px high of the 26px ring (measured).
                 Image(systemName: symbol)
-                    .font(.system(size: primary ? 12 : 10, weight: .semibold))
+                    .resizable()
+                    .scaledToFit()
+                    .fontWeight(.semibold)
+                    .frame(width: primary ? 12 : 10, height: primary ? 12 : 10)
                     .foregroundStyle(foreground)
+                    .modifier(Halo(on: halo && !primary))
             }
-            .frame(width: primary ? 30 : 26, height: primary ? 30 : 26)
+            // Hit area is the full 30pt even where the visible circle is 26.
+            .frame(width: 30, height: 30)
             .contentShape(Circle())
         }
         .buttonStyle(.plain)
@@ -386,16 +413,80 @@ private struct TransportButton: View {
         .onHover { hover = $0 && !disabled }
         .accessibilityLabel(label)
         .help(label)
-        .frame(minWidth: 30, minHeight: 30)
     }
 
     private var background: Color {
         if primary { return palette.accent }
-        return hover ? palette.accentSoft : .clear
+        return hover || on ? palette.accentSoft : .clear
     }
     private var foreground: Color {
         if primary { return .white }
-        return hover ? palette.accent : palette.text
+        return hover || on ? palette.accent : palette.text
+    }
+}
+
+/// Shuffle / repeat toggles and the share button, shared by the tray and the
+/// floating player. Callers add keyboard shortcuts where they are safe.
+struct ShuffleButton: View {
+    @ObservedObject var monitor: SpotifyMonitor
+    let palette: FL.Palette
+    var halo = false
+
+    var body: some View {
+        let on = monitor.nowPlaying?.shuffling ?? false
+        TransportButton(symbol: "shuffle", label: "Shuffle", palette: palette,
+                        disabled: monitor.availability != .available, primary: false,
+                        on: on, halo: halo) {
+            monitor.setShuffling(!on)
+        }
+        .accessibilityValue(on ? "On" : "Off")
+        .accessibilityAddTraits(.isToggle)
+    }
+}
+
+struct RepeatButton: View {
+    @ObservedObject var monitor: SpotifyMonitor
+    let palette: FL.Palette
+    var halo = false
+
+    var body: some View {
+        let on = monitor.nowPlaying?.repeating ?? false
+        TransportButton(symbol: "repeat", label: "Repeat", palette: palette,
+                        disabled: monitor.availability != .available, primary: false,
+                        on: on, halo: halo) {
+            monitor.setRepeating(!on)
+        }
+        .accessibilityValue(on ? "On" : "Off")
+        .accessibilityAddTraits(.isToggle)
+    }
+}
+
+/// Native share picker for the track's open.spotify.com link. Draws nothing
+/// when the item has no public page (ads, local files).
+struct ShareTrackButton: View {
+    let nowPlaying: NowPlaying?
+    let palette: FL.Palette
+    var halo = false
+
+    @State private var hover = false
+
+    var body: some View {
+        if let url = nowPlaying.flatMap({ shareURL(for: $0.trackId) }) {
+            ShareLink(item: url) {
+                Image(systemName: "square.and.arrow.up")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(hover ? palette.accent : palette.text)
+                    .modifier(Halo(on: halo))
+                    .background(Circle().fill(hover ? palette.accentSoft : .clear)
+                        .frame(width: 26, height: 26))
+                    .frame(width: 30, height: 30)
+                    .contentShape(Circle())
+            }
+            .buttonStyle(.plain)
+            .onHover { hover = $0 }
+            .help("Share track")
+            .accessibilityLabel("Share track")
+        }
     }
 }
 
@@ -537,7 +628,7 @@ private struct LyricsNudgeRow: View {
 
 // MARK: - Menu rows
 
-enum MenuIconKind { case window, theme, pause, play, gear, quit, eye, reload, recenter, fullscreen }
+enum MenuIconKind { case window, theme, pause, play, gear, quit, eye, reload, recenter, fullscreen, player }
 
 struct MenuRow<Trailing: View>: View {
     let icon: MenuIconKind
@@ -728,6 +819,7 @@ struct MenuIcon: View {
         case .reload: return "arrow.clockwise"
         case .recenter: return "scope"
         case .fullscreen: return "arrow.up.left.and.arrow.down.right"
+        case .player: return "play.rectangle"
         }
     }
 

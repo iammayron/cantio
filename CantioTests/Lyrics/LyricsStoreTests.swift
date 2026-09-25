@@ -26,6 +26,9 @@ final class MockPlaybackSource: PlaybackSource {
     private(set) var previousCalls = 0
     private(set) var nextCalls = 0
     private(set) var seekTargets: [Double] = []
+    private(set) var volumeTargets: [Int] = []
+    private(set) var shuffleTargets: [Bool] = []
+    private(set) var repeatTargets: [Bool] = []
     var nextErrorToInject: Error?
 
     func playPause(onError: @escaping @MainActor (Error) -> Void) {
@@ -42,6 +45,18 @@ final class MockPlaybackSource: PlaybackSource {
     }
     func seek(to seconds: Double, onError: @escaping @MainActor (Error) -> Void) {
         seekTargets.append(seconds)
+        if let err = nextErrorToInject { nextErrorToInject = nil; onError(err) }
+    }
+    func setVolume(_ volume: Int, onError: @escaping @MainActor (Error) -> Void) {
+        volumeTargets.append(volume)
+        if let err = nextErrorToInject { nextErrorToInject = nil; onError(err) }
+    }
+    func setShuffling(_ on: Bool, onError: @escaping @MainActor (Error) -> Void) {
+        shuffleTargets.append(on)
+        if let err = nextErrorToInject { nextErrorToInject = nil; onError(err) }
+    }
+    func setRepeating(_ on: Bool, onError: @escaping @MainActor (Error) -> Void) {
+        repeatTargets.append(on)
         if let err = nextErrorToInject { nextErrorToInject = nil; onError(err) }
     }
 }
