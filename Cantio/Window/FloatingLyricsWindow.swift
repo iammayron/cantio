@@ -21,6 +21,11 @@ final class FloatingLyricsWindow: NSWindow {
     /// without the frame being yanked back inward.
     var clampCenterOnly: Bool = false
 
+    /// With `clampCenterOnly`: keeps the whole rect, minus this transparent
+    /// margin, below the menu bar, which sits above every window level we
+    /// use. Nil keeps the pill's behaviour.
+    var menuBarClearanceInset: CGFloat?
+
     init(contentRect: NSRect) {
         super.init(
             contentRect: contentRect,
@@ -68,12 +73,9 @@ final class FloatingLyricsWindow: NSWindow {
         if clampCenterOnly {
             // Keep the window center (≈ the centered capsule) on-screen; let
             // the transparent margins overhang so the pill can reach an edge.
-            var f = frameRect
-            let cx = min(max(f.midX, visible.minX), visible.maxX)
-            let cy = min(max(f.midY, visible.minY), visible.maxY)
-            f.origin.x += cx - f.midX
-            f.origin.y += cy - f.midY
-            return f
+            return Self.clampCenter(frameRect, visible: visible,
+                                    screen: target?.frame ?? visible,
+                                    menuBarClearanceInset: menuBarClearanceInset)
         }
         var f = frameRect
         f.size.width = min(f.size.width, visible.width)
@@ -82,6 +84,19 @@ final class FloatingLyricsWindow: NSWindow {
         if f.maxY > visible.maxY { f.origin.y = visible.maxY - f.size.height }
         if f.minX < visible.minX { f.origin.x = visible.minX }
         if f.minY < visible.minY { f.origin.y = visible.minY }
+        return f
+    }
+
+    /// Pure: keeps the rect's centre inside `visible`; with an inset, also
+    /// keeps the top, less the inset, under the menu bar. Exposed for tests.
+    static func clampCenter(_ frameRect: NSRect, visible: NSRect, screen: NSRect,
+                            menuBarClearanceInset inset: CGFloat?) -> NSRect {
+        var f = frameRect
+        f.origin.x += min(max(f.midX, visible.minX), visible.maxX) - f.midX
+        f.origin.y += min(max(f.midY, visible.minY), visible.maxY) - f.midY
+        if let inset, visible.maxY < screen.maxY {
+            f.origin.y = min(f.origin.y, visible.maxY - f.height + inset)
+        }
         return f
     }
 }

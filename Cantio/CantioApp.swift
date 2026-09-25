@@ -21,6 +21,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let prefs = Preferences.shared
     let pillHitTarget = PillHitTarget()
     private var floatingController: FloatingLyricsController?
+    private var playerController: FloatingPlayerController?
     private var statusBar: StatusBarPopover?
     private var onboarding: OnboardingController?
     private var didBootstrap = false
@@ -79,6 +80,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         )
         controller.start()
         floatingController = controller
+        let player = FloatingPlayerController(monitor: monitor, prefs: prefs)
+        player.start()
+        playerController = player
     }
 
     // MARK: - Lost-access recovery

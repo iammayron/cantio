@@ -23,6 +23,10 @@ enum FL {
         let accentSoft: Color
     }
 
+    /// Opaque fill for the floating player's Black background. Tone-independent:
+    /// the player always renders its dark palette over it.
+    static let playerBlack = Color(.sRGB, red: 12/255, green: 12/255, blue: 14/255, opacity: 1)
+
     static func palette(tone: Tone, hue: Double = 220) -> Palette {
         switch tone {
         case .dark:

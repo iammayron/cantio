@@ -65,6 +65,21 @@ enum GlassStyle: String, CaseIterable, Identifiable {
     }
 }
 
+/// Fill behind the floating player window.
+enum PlayerBackground: String, CaseIterable, Identifiable {
+    case glass
+    case black
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .glass: return "Glass"
+        case .black: return "Black"
+        }
+    }
+}
+
 enum FontSize: Int, CaseIterable, Identifiable, Comparable {
     case xsmall = -1
     case small = 0
@@ -139,6 +154,8 @@ final class Preferences: ObservableObject {
         static let hideWhenPaused = "hideWhenPaused"
         static let alwaysOnTop = "alwaysOnTop"
         static let windowVisible = "windowVisible"
+        static let playerVisible = "playerVisible"
+        static let playerBackground = "playerBackground"
         static let launchAtLogin = "launchAtLogin"
         static let linesVisible = "linesVisible"
         static let didCompleteOnboarding = "didCompleteOnboarding"
@@ -204,6 +221,19 @@ final class Preferences: ObservableObject {
 
     @Published var windowVisible: Bool {
         didSet { defaults.set(windowVisible, forKey: Key.windowVisible) }
+    }
+
+    @Published var playerVisible: Bool {
+        didSet { defaults.set(playerVisible, forKey: Key.playerVisible) }
+    }
+
+    @Published var playerBackground: PlayerBackground {
+        didSet { defaults.set(playerBackground.rawValue, forKey: Key.playerBackground) }
+    }
+
+    static var defaultPlayerBackground: PlayerBackground {
+        if #available(macOS 26, *) { return .glass }
+        return .black
     }
 
     @Published var launchAtLogin: Bool {
@@ -308,6 +338,9 @@ final class Preferences: ObservableObject {
         } else {
             self.windowVisible = defaults.bool(forKey: Key.windowVisible)
         }
+        self.playerVisible = defaults.bool(forKey: Key.playerVisible)
+        self.playerBackground = defaults.string(forKey: Key.playerBackground)
+            .flatMap(PlayerBackground.init(rawValue:)) ?? Self.defaultPlayerBackground
         let storedLaunch = defaults.object(forKey: Key.launchAtLogin) as? Bool ?? false
         self.launchAtLogin = Self.currentLoginItemEnabled(fallback: storedLaunch)
         self.linesVisible = defaults.object(forKey: Key.linesVisible) as? Int ?? 3
